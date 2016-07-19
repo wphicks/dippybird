@@ -1,9 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """Retrieves external ip of this machine and reports it via e-mail
 
 Required modules: python-nmap and python-gnupg"""
 
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import re
 import warnings
 import os
@@ -33,7 +33,7 @@ except ImportError:
 
 #Monkeypatch for showwarning
 def _pretty_warning(message, category=UserWarning, filename='', lineno =-1):
-    print "WARNING:", message
+    print("WARNING:", message)
 
 warnings.showwarning = _pretty_warning
 
@@ -90,12 +90,12 @@ def update_ssh(hostname, ip_str, port, local_ip=None):
                 found_prev_data = True
                 try:
                     #Gather up any non-updatable info already in config file
-                    line = config_file.next()
+                    line = next(config_file)
                     while "Host " not in line:
                         if "HostName " not in line and ("Port " not in line or
                                 port == "NOT FOUND"):
                             cur_data.append(line.rstrip())
-                        line = config_file.next()
+                        line = next(config_file)
                     other_data.append(line.rstrip())
                 except StopIteration:
                     break
@@ -116,7 +116,7 @@ def parse_service(service_dict, string_desc):
     try:
         #Always sanitize your input...
         if service[0] in SUPPORTED_SERVICES:
-            if unicode(service[1]).isnumeric() or service[1] == "NOT FOUND":
+            if str(service[1]).isnumeric() or service[1] == "NOT FOUND":
                 service_dict[service[0]] = service[1]
         else:
             warnings.warn(
@@ -128,12 +128,12 @@ def parse_service(service_dict, string_desc):
 def get_local_ip(verbose=False):
     """Tries to obtain local ip"""
     if verbose:
-        print "Attempting to find local ip by hostname..."
+        print("Attempting to find local ip by hostname...")
     local_ip = socket.gethostbyname(socket.gethostname())
     if local_ip.startswith("127."):
         if verbose:
-            print "Failed. Attempting to find local ip via socket connection \
-to 8.8.8.8..."
+            print("Failed. Attempting to find local ip via socket connection \
+to 8.8.8.8...")
         try:
             cur_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             cur_sock.connect(("8.8.8.8", 80))
@@ -151,21 +151,22 @@ def get_own_ip(verbose=False):
     confirmation_count = 0
     for site in IP_SITES:
         if verbose:
-            print "Retrieving IP from {}".format(site)
+            print("Retrieving IP from {}".format(site))
         try:
-            data_str = urllib2.urlopen(site, None, 2).read()
+            data_str = urllib.request.urlopen(site, None, 2).read()
+            data_str = data_str.decode('utf-8')
             ip_str = IP_REGEX.search(data_str).group()
             if trial_ip is not None:
                 if ip_str == trial_ip:
                     if verbose:
-                        print "IP confirmed."
+                        print("IP confirmed.")
                     return ip_str
             else:
                 trial_ip = ip_str
                 if verbose:
-                    print "IP found: {}. Confirming...".format(ip_str)
+                    print("IP found: {}. Confirming...".format(ip_str))
                 confirmation_count = 1
-        except (urllib2.URLError, socket.timeout):
+        except (urllib.error.URLError, socket.timeout):
             continue
 
     if confirmation_count == 1:
@@ -190,7 +191,7 @@ def verify(text, signature, trust_level="full", accept_bad_keys=False,
 
     gpg = gnupg.GPG()
     if verbose:
-        print "Analyzing signature..."
+        print("Analyzing signature...")
     with open("/tmp/temp.asc", "w") as sig_file:
         sig_file.write(signature)
     verify_status = gpg.verify_data("/tmp/temp.asc", text)
@@ -201,7 +202,7 @@ def verify(text, signature, trust_level="full", accept_bad_keys=False,
             "ultimate":verify_status.TRUST_ULTIMATE}
     if verify_status.trust_level is None:
         if verbose:
-            print "Signature invalid!"
+            print("Signature invalid!")
         return False
     if verify_status.key_status is not None:
         warnings.warn(
@@ -211,27 +212,27 @@ def verify(text, signature, trust_level="full", accept_bad_keys=False,
             return False
     if verify_status.trust_level >= trust_dict[trust_level]:
         if verbose:
-            print "Signature valid at trust level {} or higher".format(
-                    trust_level)
+            print("Signature valid at trust level {} or higher".format(
+                    trust_level))
         if verify_status.trust_level < trust_dict["full"]:
             warnings.warn("Trust level {} for signature".format(
                 verify_status.trust_level))
         return True
     if verbose:
-        print "Signature not valid at designated trust level {}".format(
-            trust_level)
-        print "Actual trust level: {}".format(verify_status.trust_text)
+        print("Signature not valid at designated trust level {}".format(
+            trust_level))
+        print("Actual trust level: {}".format(verify_status.trust_text))
     return False
 
 def parse_ssh(report_email):
     """Updates ssh config file with new ip addresses and ports"""
-    print report_email
+    print(report_email)
 
 def read_config(filename, verbose=False):
     """Reads configuration from file"""
     config = {"recipients":{}}
     if verbose:
-        print "Reading configuration from {}".format(filename)
+        print("Reading configuration from {}".format(filename))
     with open(filename) as file_:
         for line in file_:
             if ":" in line:
@@ -265,7 +266,7 @@ file {}".format(section, filename))
 def get_port_info(verbose=False):
     """Retrieves nmap-like info on port usage"""
     if verbose:
-        print "Checking port usage..."
+        print("Checking port usage...")
     hostname = socket.gethostname()
     home = "127.0.0.1"
 
@@ -275,7 +276,7 @@ def get_port_info(verbose=False):
     nm.scan(home, "22-2222")
     services = nm[home].get('tcp', {})
     #TODO: Figure out and include udp
-    services = {services[port]['name'] : port for port in services.keys()}
+    services = {services[port]['name'] : port for port in list(services.keys())}
 
     return services
 
@@ -283,7 +284,7 @@ def log_ip(ip_str, log_file=os.path.expanduser(r"~/.ip/ip.log"),
         verbose=False):
     """Logs given ip string to file"""
     if verbose:
-        print "Writing ip to {}".format(log_file)
+        print("Writing ip to {}".format(log_file))
     with open(log_file, 'w') as file_:
         file_.write(ip_str)
 
@@ -291,7 +292,7 @@ def get_logged_ip(log_file=os.path.expanduser(r"~/.ip/ip.log"),
         verbose=False):
     """Returns previously logged ip"""
     if verbose:
-        print "Retrieving ip from {}".format(log_file)
+        print("Retrieving ip from {}".format(log_file))
     with open(log_file) as file_:
         return file_.read().strip()
 
@@ -342,11 +343,11 @@ class IpReporter(object):
         """Retrieves reports for ip address of other computers"""
         #Log onto IMAP server
         if verbose:
-            print "Logging onto {}...".format(self.config["imap server"])
+            print("Logging onto {}...".format(self.config["imap server"]))
         mail = imaplib.IMAP4_SSL(self.config["imap server"])
         mail.login(self.config["user"], self.config["password"])
         if verbose:
-            print "Searching for latest reports..."
+            print("Searching for latest reports...")
         #WARNING: Following line is gmail specific for now
         mail.select("inbox")
         report_emails = []
@@ -393,7 +394,7 @@ class IpReporter(object):
 
                 if part.get_content_type() == 'application/pgp-signature':
                     if verbose:
-                        print "Signature found."
+                        print("Signature found.")
                     signature = part.get_payload(decode=True)
 
             if ((signature is None and self.config.get("trust level",
@@ -405,11 +406,11 @@ class IpReporter(object):
                     "{}".format(other_host))
             else:
                 if verbose:
-                    print "Updating service config files..."
+                    print("Updating service config files...")
                 for service in other_services:
                     if verbose:
-                        print "Updating service {} for {}".format(
-                            service, other_host)
+                        print("Updating service {} for {}".format(
+                            service, other_host))
                     update_service(service, other_host, other_ip,
                             other_services[service], local_ip=other_local_ip)
 
@@ -417,15 +418,15 @@ class IpReporter(object):
         """Generate and send all e-mails"""
         if not force and self.ip_str == get_logged_ip():
             if verbose:
-                print "IP unchanged from last report."
+                print("IP unchanged from last report.")
             return
         if verbose:
-            print "Preparing and sending reports..."
+            print("Preparing and sending reports...")
         self.generate_email_texts()
         self.generate_emails_from_texts()
         self.send_emails()
         if verbose:
-            print "Logging new ip..."
+            print("Logging new ip...")
         log_ip(self.ip_str)
 
     def __str__(self):
@@ -445,7 +446,7 @@ class IpReporter(object):
 
         #Log onto server
         if self.verbose:
-            print "Logging onto e-mail server"
+            print("Logging onto e-mail server")
         server = smtplib.SMTP(server)
         server.ehlo()
         server.starttls()
@@ -453,20 +454,20 @@ class IpReporter(object):
 
         for email_ in self.report_emails:
             if self.verbose:
-                print "Sending report to {}".format(email_["To"])
+                print("Sending report to {}".format(email_["To"]))
             server.sendmail(email_["From"], email_["To"],
                     email_.as_string())
 
         #Logoff server
         server.quit()
         if self.verbose:
-            print "Logging off e-mail server"
+            print("Logging off e-mail server")
 
     def generate_email_texts(self):
         """Generate text of all ip report e-mails"""
-        for recipient in self.config["recipients"].keys():
+        for recipient in list(self.config["recipients"].keys()):
             if self.verbose:
-                print "Generating report for {}".format(recipient)
+                print("Generating report for {}".format(recipient))
             report_text = ["Hostname: {}".format(self.hostname)]
             report_text.append("IP: {}".format(self.ip_str))
             report_text.append("Local IP: {}".format(self.local_ip))
@@ -477,9 +478,9 @@ class IpReporter(object):
 
     def generate_emails_from_texts(self):
         """Generate email objects from report texts"""
-        for recipient in self.report_texts.keys():
+        for recipient in list(self.report_texts.keys()):
             if self.verbose:
-                print "Generating e-mail for {}".format(recipient)
+                print("Generating e-mail for {}".format(recipient))
             base_msg = MIMEText(self.report_texts[recipient], 'plain')
             if self.key_id is not None:
                 cur_msg = MIMEMultipart(_subtype="signed", micalg="pgp-sha1")
@@ -539,6 +540,6 @@ if __name__ == "__main__":
     if args.report or args.force:
         ipr.report_ip(force=args.force, verbose=args.verbose)
     if args.echo:
-        print ipr
+        print(ipr)
     if args.local:
-        print ipr.local_ip
+        print(ipr.local_ip)
